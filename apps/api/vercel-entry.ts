@@ -3,10 +3,10 @@ import { AppModule } from './src/app.module';
 import { ValidationPipe } from '@nestjs/common';
 import serverlessExpress from '@vendia/serverless-express';
 
-let cachedServer: any;
+let cachedApp: any;
 
 async function bootstrap() {
-    if (!cachedServer) {
+    if (!cachedApp) {
         try {
             const app = await NestFactory.create(AppModule);
             app.setGlobalPrefix('api/v1');
@@ -21,27 +21,26 @@ async function bootstrap() {
                 forbidNonWhitelisted: true,
             }));
             await app.init();
-            const expressApp = app.getHttpAdapter().getInstance();
-            cachedServer = serverlessExpress({ app: expressApp });
+            cachedApp = app;
         } catch (error) {
             console.error('❌ NestJS Bootstrap Error:', error);
             throw error;
         }
     }
-    return cachedServer;
+    return cachedApp;
 }
 
 export default async (req: any, res: any) => {
     try {
-        const server = await bootstrap();
-        return server(req, res);
+        const app = await bootstrap();
+        const expressApp = app.getHttpAdapter().getInstance();
+        return expressApp(req, res);
     } catch (error: any) {
         console.error('🔥 Vercel Serverless Function Crash:', error);
         res.status(500).json({
             statusCode: 500,
             message: 'Internal Server Error',
             error: error.message,
-            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
         });
     }
 };
