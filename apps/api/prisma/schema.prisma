@@ -1,0 +1,391 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --------------------------------------------------------
+// MULTI-TENANCY & CLINIC MANAGEMENT
+// --------------------------------------------------------
+
+model Clinic {
+  id                  String   @id @default(uuid())
+  name                String
+  license_no          String?
+  branding_config     Json?    // Branding: { "logo": "url", "colors": { "primary": "#hex" } }
+  is_marketplace_active Boolean @default(false)
+  discovery_enabled     Boolean @default(false) // Marketplace Wiring (Admin Ready)
+  is_verified         Boolean @default(false)
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+
+  doctors             User[]
+  patients            Patient[]
+  appointments        Appointment[]
+}
+
+// ... (User Model Unchanged) ...
+enum Role {
+  SUPER_ADMIN
+  OWNER
+  CLINIC_ADMIN
+  DOCTOR
+  RECEPTIONIST
+  PATIENT
+}
+
+model User {
+  id                  String   @id @default(uuid())
+  email               String?  @unique
+  phone               String   @unique
+  password_hash       String
+  role                Role     @default(PATIENT)
+  
+  // Encrypted Fields (handled by middleware)
+  full_name           String
+  
+  clinic_id           String?
+  clinic              Clinic?  @relation(fields: [clinic_id], references: [id])
+  
+  // Relations
+  patient_profile     Patient? // If role is PATIENT
+  doctor_appointments Appointment[] @relation("DoctorAppointments")
+  
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+}
+
+// --------------------------------------------------------
+// PATIENTS & CLINICAL DATA
+// --------------------------------------------------------
+
+// --------------------------------------------------------
+// PATIENTS & IDENTITY (KYC LAYER)
+// --------------------------------------------------------
+
+model Patient {
+  id                  String   @id @default(uuid())
+  user_id             String   @unique
+  user                User     @relation(fields: [user_id], references: [id])
+  
+  // Relationships
+  clinic_id           String
+  clinic              Clinic   @relation(fields: [clinic_id], references: [id])
+  
+  // Basic Info
+  gender              String
+  dob                 DateTime
+  blood_group         String?
+  
+  // Identity (Public/Shared)
+  abha_id             String?  // ABHA Integration
+  healthflo_id        String   @unique // Unified ID
+  
+  // PII (Link to Secret Vault)
+  secret_id           String?  @unique
+  secret_profile      SecretIdentity? @relation(fields: [secret_id], references: [id])
+
+  // Medical Profile (Baseline)
+  anthropometry       Json?    // { height, weight, bmi }
+  vitals_summary      Json?    // Latest: { bp, hr, spo2, temp }
+  
+  medical_history     Json?    // Chronic: [ { condition: "Diabetes", since: "2020" } ]
+  surgical_history    Json?    // [ { procedure: "Appendectomy", date: "2018" } ]
+  allergies           Json?    // { drug: [], food: [] }
+  medications         Json?    // Current ongoing meds
+  
+  // Clinical Data
+  dental_records      DentalRecord[]
+  clinical_notes      ClinicalNote[]
+  appointments        Appointment[]
+  
+  // Insurance & Finance
+  insurance_profile   InsuranceProfile?
+  insurance_claims    InsuranceClaim[]
+  emi_applications    EMIApplication[]
+  
+  // Audit Logs
+  audit_logs          AuditLog[]
+  vitals_history      VitalsHistory[]
+
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+}
+
+// 🔒 RESTRICTED ACCESS TABLE (PII)
+model SecretIdentity {
+  id                  String   @id @default(uuid())
+  
+  // Encrypted Fields (AES-256)
+  aadhaar_number      String?  // Vaulted
+  pan_number          String?  // Vaulted
+  passport_number     String?
+  
+  cibil_score         Int?     // Fintech sync
+  primary_contact     String?  // Encrypted
+  email               String?  // Encrypted
+  full_address        String?  // Encrypted
+  
+  patient             Patient?
+}
+
+// --------------------------------------------------------
+// INSURANCE & TPA (CLAIM LAYER)
+// --------------------------------------------------------
+
+model InsuranceProfile {
+  id                  String   @id @default(uuid())
+  patient_id          String   @unique
+  patient             Patient  @relation(fields: [patient_id], references: [id])
+
+  provider_name       String
+  tpa_name            String?
+  policy_number       String
+  policy_type         String   // Corporate, Retail, Floater
+  
+  sum_insured         Decimal
+  balance_amount      Decimal
+  
+  valid_from          DateTime
+  valid_to            DateTime
+  
+  // JSONB for flexibility
+  sublimits           Json?    // { "room_rent": 5000, "dental": 10000, "maternity": 50000 }
+  coverage_details    Json?    // { "copay_percent": 10, "waiting_period_diseases": [] }
+  
+  updated_at          DateTime @updatedAt
+}
+
+// --------------------------------------------------------
+// AUDIT & LOGGING
+// --------------------------------------------------------
+
+model AuditLog {
+  id                  String   @id @default(uuid())
+  patient_id          String
+  patient             Patient  @relation(fields: [patient_id], references: [id])
+  
+  action_type         String   // "UPDATE_MEDICAL_HISTORY", "VIEW_SECRET_ID"
+  field_changed       String?
+  old_value           Json?
+  new_value           Json?
+  
+  performed_by        String   // User ID of doctor/admin
+  timestamp           DateTime @default(now())
+}
+
+// --------------------------------------------------------
+// DENTAL ENGINE & CLINICAL EXAM
+// --------------------------------------------------------
+
+model DentalRecord {
+  id                  String   @id @default(uuid())
+  patient_id          String
+  patient             Patient  @relation(fields: [patient_id], references: [id])
+  
+  charting_data       Json     // Universal Numbering System
+  
+  treatment_plans     TreatmentPlan[]
+  
+  updated_at          DateTime @updatedAt
+}
+
+model ClinicalNote {
+  id              String   @id @default(uuid())
+  patient_id      String
+  patient         Patient  @relation(fields: [patient_id], references: [id])
+  
+  // Vitals at time of visit
+  visit_vitals    Json?    // { bp, hr, spo2, temp, rr }
+  
+  // Examination
+  systemic_review Json?    // { cvs, cns, rs, git, msk }
+  chief_complaint String? 
+  clinical_findings String?
+  diagnosis       String?  // Linked to ICD-11
+  
+  // Lab Tracking
+  lab_orders      Json?    // [ "HbA1c", "Vitamin D" ]
+  lab_results     Json?    // { "HbA1c": 6.5, "date": "..." } -> Powers Dashboard
+  
+  treatment_plan  String?
+  
+  // Files
+  xray_urls       String[] // Encrypted URLs (DICOM/JPG)
+  consent_forms   String[] // Signed PDF URLs
+  
+  recall_date     DateTime? // Auto-trigger for Patient App
+  
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+}
+
+// --------------------------------------------------------
+// TREATMENTS & FINTECH
+// --------------------------------------------------------
+
+enum TreatmentType {
+  ROOT_CANAL
+  IMPLANT
+  ORTHODONTICS
+  PEDIATRICS
+  GENERAL
+}
+
+model TreatmentPlan {
+  id                  String   @id @default(uuid())
+  dental_record_id    String
+  dental_record       DentalRecord @relation(fields: [dental_record_id], references: [id])
+  
+  type                TreatmentType @default(GENERAL)
+  procedures          Json     // List of procedure codes & costs
+  total_cost          Decimal
+  
+  status              String   @default("draft") // draft, accepted, completed
+  
+  created_at          DateTime @default(now())
+}
+
+model InsuranceClaim {
+  id              String   @id @default(uuid())
+  patient_id      String
+  patient         Patient  @relation(fields: [patient_id], references: [id])
+  
+  provider_name   String
+  claim_amount    Decimal
+  status          String   @default("submitted") // submitted, processing, approved, rejected
+  
+  // Brain Engine Hook
+  ai_audit_flags  Json?    // AI detected discrepancies
+  
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+}
+
+model EMIApplication {
+  id              String   @id @default(uuid())
+  patient_id      String
+  patient         Patient  @relation(fields: [patient_id], references: [id])
+  
+  principal_amount Decimal
+  tenure_months    Int
+  interest_rate    Decimal
+  status           String  @default("applied")
+  
+  // Brain Engine Hook
+  ai_risk_score    Float?  // 0.0 - 1.0
+  
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+}
+
+// --------------------------------------------------------
+// APPOINTMENTS & QUEUE
+// --------------------------------------------------------
+
+enum ApptStatus {
+  SCHEDULED
+  WAITING
+  IN_CHAIR
+  COMPLETED
+  CANCELLED
+}
+
+model Appointment {
+  id                  String   @id @default(uuid())
+  clinic_id           String
+  clinic              Clinic   @relation(fields: [clinic_id], references: [id])
+  
+  patient_id          String
+  patient             Patient  @relation(fields: [patient_id], references: [id])
+  
+  doctor_id           String
+  doctor              User     @relation("DoctorAppointments", fields: [doctor_id], references: [id])
+  
+  start_time          DateTime
+  end_time            DateTime
+  status              ApptStatus @default(SCHEDULED)
+  
+  // Queue Logic
+  queue_number        Int?
+  estimated_wait_mins Int?
+  is_emergency        Boolean @default(false)
+  visit_type          String  @default("CONSULTATION") // CONSULTATION, PROCEDURE, FOLLOW_UP
+  
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+
+  billing             Billing?
+}
+
+// --------------------------------------------------------
+// INVENTORY & REVENUE
+// --------------------------------------------------------
+
+model Inventory {
+  id              String   @id @default(uuid())
+  clinic_id       String
+  
+  name            String
+  stock_quantity  Int
+  unit            String   // "units", "ml", "packs"
+  min_stock_level Int      @default(10)
+  cost_per_unit   Decimal
+  
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+}
+
+model TariffMaster {
+  id              String   @id @default(uuid())
+  clinic_id       String
+  
+  procedure_name  String
+  procedure_code  String   @unique
+  category        String   // "Diagnostic", "Restorative", "Invisalign"
+  
+  base_cost       Decimal
+  gst_percent     Int      @default(12) // 5, 12, 18
+  
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+// --------------------------------------------------------
+// THE VISUAL LEDGER (ANALYTICS)
+// --------------------------------------------------------
+
+model VitalsHistory {
+  id            String   @id @default(uuid())
+  patient_id    String
+  patient       Patient  @relation(fields: [patient_id], references: [id])
+  
+  temp          Float?
+  bp_sys        Int?
+  bp_dia        Int?
+  hr            Int?
+  spo2          Int?
+  
+  recorded_at   DateTime @default(now())
+}
+
+model Billing {
+  id              String   @id @default(uuid())
+  appointment_id  String   @unique
+  appointment     Appointment @relation(fields: [appointment_id], references: [id])
+  
+  total_amount    Decimal
+  gst_amount      Decimal
+  discount_type   String?  // PERCENTAGE, FIXED
+  discount_value  Decimal?
+  
+  payment_status  String   @default("PENDING") // PENDING, PAID, PARTIAL
+  is_emi_enabled  Boolean  @default(false)
+  
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+}

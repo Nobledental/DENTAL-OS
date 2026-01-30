@@ -1,0 +1,17 @@
+{
+    "name": "dentalos-monorepo",
+    "version": "1.0.0",
+    "private": true,
+    "description": "Noble DentalOS Monorepo (Next.js + NestJS)",
+    "workspaces": [
+        "apps/*"
+    ],
+    "scripts": {
+        "build": "npm run build --workspaces",
+        "test": "npm run test --workspaces"
+    },
+    "devDependencies": {
+        "prettier": "^3.0.0"
+    },
+    "author": "Noble Dental Care"
+}

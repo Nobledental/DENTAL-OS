@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  # 🐘 PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: dentalos_db
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: dentalos_core
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - dentalos_net
+
+  # 🚀 Redis (Cache & Queue)
+  redis:
+    image: redis:7-alpine
+    container_name: dentalos_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - dentalos_net
+
+  # 🧠 Meilisearch (Optional - Future Search Engine)
+  # meilisearch:
+  #   image: getmeili/meilisearch:v1.3
+  #   ports:
+  #     - "7700:7700"
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  dentalos_net:
+    driver: bridge
