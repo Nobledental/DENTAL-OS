@@ -10,7 +10,11 @@ async function bootstrap() {
         try {
             const app = await NestFactory.create(AppModule);
             app.setGlobalPrefix('api/v1');
-            app.enableCors();
+            app.enableCors({
+                origin: ['https://noble-os.vercel.app', 'http://localhost:3000'],
+                methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+                credentials: true,
+            });
             app.useGlobalPipes(new ValidationPipe({
                 whitelist: true,
                 transform: true,
