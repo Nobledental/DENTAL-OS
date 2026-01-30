@@ -6,6 +6,9 @@ import { AuthModule } from './auth/auth.module';
 import { PatientModule } from './patient/patient.module';
 import { ClinicalModule } from './clinical/clinical.module';
 import { AppointmentModule } from './appointment/appointment.module';
+import { BillingModule } from './billing/billing.module';
+import { StaffModule } from './staff/staff.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -30,6 +33,15 @@ import { AppointmentModule } from './appointment/appointment.module';
 
     // 📅 Appointment & Queue
     AppointmentModule,
+
+    // 💰 Billing & Finance
+    BillingModule,
+
+    // 👥 Staff & RBAC
+    StaffModule,
+
+    // 🔔 Notifications
+    NotificationsModule,
   ],
   controllers: [],
   providers: [],

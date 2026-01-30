@@ -29,9 +29,10 @@ model Clinic {
   doctors      User[]
   patients     Patient[]
   appointments Appointment[]
+  invoices     Invoice[]
+  bundles      Bundle[]
 }
 
-// ... (User Model Unchanged) ...
 enum Role {
   SUPER_ADMIN
   OWNER
@@ -50,6 +51,9 @@ model User {
 
   // Encrypted Fields (handled by middleware)
   full_name String
+
+  permissions Json? // can_view_revenue, can_edit_inventory, etc.
+  fcm_token   String? // For Notifications
 
   clinic_id String?
   clinic    Clinic? @relation(fields: [clinic_id], references: [id])
@@ -114,6 +118,7 @@ model Patient {
   // Audit Logs
   audit_logs     AuditLog[]
   vitals_history VitalsHistory[]
+  invoices       Invoice[]
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -341,6 +346,8 @@ model Inventory {
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
+
+  bundle_items BundleItem[]
 }
 
 model TariffMaster {
@@ -353,6 +360,8 @@ model TariffMaster {
 
   base_cost   Decimal
   gst_percent Int     @default(12) // 5, 12, 18
+
+  bundle      Bundle?
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -381,6 +390,9 @@ model Billing {
   appointment_id String      @unique
   appointment    Appointment @relation(fields: [appointment_id], references: [id])
 
+  invoice_id String? @unique
+  invoice    Invoice? @relation(fields: [invoice_id], references: [id])
+
   total_amount   Decimal
   gst_amount     Decimal
   discount_type  String? // PERCENTAGE, FIXED
@@ -391,4 +403,71 @@ model Billing {
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
+}
+
+model Invoice {
+  id         String   @id @default(uuid())
+  invoice_no String   @unique // INV-2024-001
+  patient_id String
+  patient    Patient  @relation(fields: [patient_id], references: [id])
+  clinic_id  String
+  clinic     Clinic   @relation(fields: [clinic_id], references: [id])
+
+  items      InvoiceItem[]
+  billing    Billing?
+
+  subtotal   Decimal
+  gst_total  Decimal
+  total      Decimal
+
+  status     String   @default("DRAFT") // DRAFT, FINALIZED, CANCELLED
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+}
+
+model InvoiceItem {
+  id         String   @id @default(uuid())
+  invoice_id String
+  invoice    Invoice  @relation(fields: [invoice_id], references: [id])
+
+  name       String
+  quantity   Int
+  unit_price Decimal
+  tax_rate   Int      @default(0)
+  tax_amount Decimal
+
+  // Optional links for tracking
+  tariff_id  String?
+  bundle_id  String?
+
+  created_at DateTime @default(now())
+}
+
+model Bundle {
+  id         String   @id @default(uuid())
+  clinic_id  String
+  clinic     Clinic   @relation(fields: [clinic_id], references: [id])
+  name       String
+  description String?
+  
+  tariff_id  String   @unique
+  tariff     TariffMaster @relation(fields: [tariff_id], references: [id])
+
+  items      BundleItem[]
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+}
+
+model BundleItem {
+  id         String   @id @default(uuid())
+  bundle_id  String
+  bundle     Bundle   @relation(fields: [bundle_id], references: [id])
+
+  inventory_id String
+  inventory    Inventory @relation(fields: [inventory_id], references: [id])
+
+  quantity_needed Int
+
+  created_at DateTime @default(now())
 }

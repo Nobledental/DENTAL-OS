@@ -1,9 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { FirebaseAdminService } from '../notifications/firebase-admin.service';
 
 @Injectable()
 export class AppointmentService {
-    constructor(private prisma: PrismaService) { }
+    constructor(
+        private prisma: PrismaService,
+        private firebaseAdmin: FirebaseAdminService,
+    ) { }
 
     async checkIn(patientId: string, clinicId: string, isEmergency: boolean = false) {
         // 1. Get today's range
@@ -57,19 +61,15 @@ export class AppointmentService {
             is_emergency: isEmergency,
         } as any;
 
-        if (existingAppt) {
-            return this.prisma.appointment.update({
-                where: { id: existingAppt.id },
-                data,
-                include: { patient: { include: { user: true } } }
-            });
-        }
-
         const clinicDoctor = await this.prisma.user.findFirst({
             where: { clinic_id: clinicId, role: 'DOCTOR' }
         });
 
-        return this.prisma.appointment.create({
+        const result = await (existingAppt ? this.prisma.appointment.update({
+            where: { id: existingAppt.id },
+            data,
+            include: { patient: { include: { user: true } } }
+        }) : this.prisma.appointment.create({
             data: {
                 patient_id: patientId,
                 clinic_id: clinicId,
@@ -79,7 +79,18 @@ export class AppointmentService {
                 end_time: new Date(Date.now() + 30 * 60000),
             },
             include: { patient: { include: { user: true } } }
-        });
+        }));
+
+        // Trigger Zero-Cost Notification
+        if (result.patient?.user?.fcm_token) {
+            this.firebaseAdmin.sendPushNotification(
+                result.patient.user.fcm_token,
+                "Checked In! 🦷",
+                `You are #${result.queue_number} in line. Est. wait: ${result.estimated_wait_mins} mins.`
+            );
+        }
+
+        return result;
     }
 
     async getActiveQueue(clinicId: string) {

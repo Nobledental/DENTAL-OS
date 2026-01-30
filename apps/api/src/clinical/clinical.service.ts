@@ -64,4 +64,29 @@ export class ClinicalService {
     // legacy stub
     return {};
   }
+
+  // --- Dental Charting (Phase 8) ---
+
+  async saveDentalRecord(patientId: string, chartingData: any) {
+    return this.prisma.dentalRecord.create({
+      data: {
+        patient_id: patientId,
+        charting_data: chartingData
+      }
+    });
+  }
+
+  async getDentalRecord(patientId: string) {
+    return this.prisma.dentalRecord.findFirst({
+      where: { patient_id: patientId },
+      orderBy: { updated_at: 'desc' }
+    });
+  }
+
+  async getDentalRecordHistory(patientId: string) {
+    return this.prisma.dentalRecord.findMany({
+      where: { patient_id: patientId },
+      orderBy: { updated_at: 'desc' }
+    });
+  }
 }
