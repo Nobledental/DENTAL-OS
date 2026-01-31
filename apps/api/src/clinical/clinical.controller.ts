@@ -1,12 +1,14 @@
-import { Controller, Get, Post, Body, Param } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query } from '@nestjs/common';
 import { ClinicalService } from './clinical.service';
 import { AnalyticsService } from './analytics.service';
+import { ClinicalSpecialistService } from './clinical-specialist.service';
 
 @Controller('clinical')
 export class ClinicalController {
   constructor(
     private readonly clinicalService: ClinicalService,
-    private readonly analyticsService: AnalyticsService
+    private readonly analyticsService: AnalyticsService,
+    private readonly specialistService: ClinicalSpecialistService
   ) { }
 
   @Get('analytics/:clinicId')
@@ -49,5 +51,56 @@ export class ClinicalController {
   @Get('dental-record/:patientId/history')
   getDentalRecordHistory(@Param('patientId') patientId: string) {
     return this.clinicalService.getDentalRecordHistory(patientId);
+  }
+
+  // --- Specialist Module (Phase 11) ---
+
+  @Post('diagnosis/provisional')
+  getProvisionalDiagnosis(@Body() body: { symptoms: string[] }) {
+    return this.specialistService.getProvisionalDiagnosis(body.symptoms);
+  }
+
+  @Post('rct/save')
+  saveRCT(@Body() body: any) {
+    return this.specialistService.saveRCTData(
+      body.dentalRecordId,
+      body.toothNumber,
+      body.data
+    );
+  }
+
+  @Post('surgery/war-score')
+  calculateWAR(@Body() body: any) {
+    return this.specialistService.calculateWARScore(body);
+  }
+
+  @Post('ortho/cephalometric')
+  saveCephalometric(@Body() body: any) {
+    return this.specialistService.saveCephalometricData(body.dentalRecordId, body.data);
+  }
+
+  @Get('icd/search')
+  searchICD(@Query('q') searchTerm: string) {
+    return this.specialistService.searchICDCode(searchTerm);
+  }
+
+  @Post('assets/upload')
+  uploadAsset(@Body() body: any) {
+    return this.specialistService.uploadClinicalAsset(body);
+  }
+
+  @Get('assets/patient/:patientId')
+  getAssets(@Param('patientId') patientId: string) {
+    return this.specialistService.getPatientAssets(patientId);
+  }
+
+  @Post('medication/log')
+  logMedication(@Body() body: any) {
+    return this.specialistService.logMedication(body);
+  }
+
+  @Get('medication/history/:patientId')
+  getMedicationHistory(@Param('patientId') patientId: string, @Query('days') days?: number) {
+    return this.specialistService.getMedicationHistory(patientId, days ? parseInt(days.toString()) : 7);
   }
 }

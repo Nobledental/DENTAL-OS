@@ -21,10 +21,18 @@ model Clinic {
   license_no            String?
   branding_config       Json? // Branding: { "logo": "url", "colors": { "primary": "#hex" } }
   is_marketplace_active Boolean  @default(false)
-  discovery_enabled     Boolean  @default(false) // Marketplace Wiring (Admin Ready)
+  discovery_enabled     Boolean  @default(false)
   is_verified           Boolean  @default(false)
-  created_at            DateTime @default(now())
-  updated_at            DateTime @updatedAt
+
+  // Public Profile (Zomato-style)
+  services         Json? // ["Root Canal", "Implants"]
+  gallery          Json? // ["url1", "url2"]
+  doctor_bio       Json? // { name, bio, image }
+  rating_avg       Float    @default(0)
+  review_count     Int      @default(0)
+
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
 
   doctors      User[]
   patients     Patient[]
@@ -32,6 +40,9 @@ model Clinic {
   invoices     Invoice[]
   bundles      Bundle[]
   settlements  DaySettlement[]
+  reviews      Review[]
+  assets       ClinicAsset[]
+  invitations  ConsultantInvitation[]
 }
 
 enum Role {
@@ -92,6 +103,8 @@ model Patient {
   // Identity (Public/Shared)
   abha_id      String? // ABHA Integration
   healthflo_id String  @unique // Unified ID
+  is_global    Boolean @default(false) // Whether this is a shared Global HealthFlo account
+  verified_at  DateTime?
 
   // PII (Link to Secret Vault)
   secret_id      String?         @unique
@@ -115,6 +128,9 @@ model Patient {
   insurance_profile InsuranceProfile?
   insurance_claims  InsuranceClaim[]
   emi_applications  EMIApplication[]
+  medication_logs   MedicationLog[]
+  reviews           Review[]
+  assets            ClinicAsset[]
 
   // Audit Logs
   audit_logs     AuditLog[]
@@ -331,6 +347,7 @@ model Appointment {
   updated_at DateTime @updatedAt
 
   billing Billing?
+  review  Review?
 }
 
 // --------------------------------------------------------
@@ -499,5 +516,74 @@ model BundleItem {
 
   quantity_needed Int
 
+  created_at DateTime @default(now())
+}
+
+// --------------------------------------------------------
+// MEDICAL BRAIN: RANKING, DIAGNOSTICS & ROSTER
+// --------------------------------------------------------
+
+model Review {
+  id             String      @id @default(uuid())
+  clinic_id      String
+  clinic         Clinic      @relation(fields: [clinic_id], references: [id])
+  patient_id     String
+  patient        Patient     @relation(fields: [patient_id], references: [id])
+  appointment_id String      @unique
+  appointment    Appointment @relation(fields: [appointment_id], references: [id])
+
+  rating         Int         // 1-5
+  comment        String?
+  reply          String?     // Clinic's reply
+  
+  is_verified    Boolean     @default(true) // Should be true if it passed appointment check
+  created_at     DateTime    @default(now())
+}
+
+model ClinicAsset {
+  id         String   @id @default(uuid())
+  clinic_id  String
+  clinic     Clinic   @relation(fields: [clinic_id], references: [id])
+  patient_id String?  // Optional: If linked to a patient's case sheet
+  patient    Patient? @relation(fields: [patient_id], references: [id])
+  
+  type       String   // XRAY_IOPA, XRAY_OPG, PHOTO_CLINICAL
+  url        String
+  metadata   Json?    // { "tooth_number": 14, "notes": "initial" }
+  
+  created_at DateTime @default(now())
+}
+
+model ICDCode {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  description String
+  category    String?
+}
+
+model MedicationLog {
+  id         String   @id @default(uuid())
+  patient_id String
+  patient    Patient  @relation(fields: [patient_id], references: [id])
+  
+  drug_name  String
+  status     String   // TAKEN, MISSED
+  notes      String?
+  
+  logged_at  DateTime @default(now())
+}
+
+model ConsultantInvitation {
+  id         String   @id @default(uuid())
+  clinic_id  String
+  clinic     Clinic   @relation(fields: [clinic_id], references: [id])
+  
+  email      String
+  role       Role     @default(DOCTOR)
+  department String?  // ORTHODONTICS, ENDODONTICS, etc.
+  status     String   @default("PENDING") // PENDING, ACCEPTED, EXPIRED
+  token      String   @unique
+  
+  expires_at DateTime
   created_at DateTime @default(now())
 }
