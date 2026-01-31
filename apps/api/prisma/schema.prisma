@@ -31,6 +31,7 @@ model Clinic {
   appointments Appointment[]
   invoices     Invoice[]
   bundles      Bundle[]
+  settlements  DaySettlement[]
 }
 
 enum Role {
@@ -324,6 +325,8 @@ model Appointment {
   is_emergency        Boolean @default(false)
   visit_type          String  @default("CONSULTATION") // CONSULTATION, PROCEDURE, FOLLOW_UP
 
+  status_timestamps   Json? // { "waiting_at": ISOString, "in_chair_at": ISOString, "completed_at": ISOString }
+
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
@@ -398,11 +401,38 @@ model Billing {
   discount_type  String? // PERCENTAGE, FIXED
   discount_value Decimal?
 
-  payment_status String  @default("PENDING") // PENDING, PAID, PARTIAL
-  is_emi_enabled Boolean @default(false)
+  payment_mode   String? // UPI, CASH, CARD
+  is_verified    Boolean @default(false)
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
+}
+
+model DaySettlement {
+  id             String   @id @default(uuid())
+  clinic_id      String
+  clinic         Clinic   @relation(fields: [clinic_id], references: [id])
+  date           DateTime // The date being settled
+  
+  total_cash     Decimal  @default(0)
+  total_upi      Decimal  @default(0)
+  total_card     Decimal  @default(0)
+  total_revenue  Decimal  @default(0)
+  
+  patient_count  Int      @default(0)
+  procedure_count Int      @default(0)
+  
+  status         String   @default("OPEN") // OPEN, CLOSED
+  closed_at      DateTime?
+  closed_by_id   String?
+  
+  summary_json   Json?    // Detailed breakdown for PDF regeneration
+  unlock_history Json?    // Audit trail for overrides
+  
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  @@unique([clinic_id, date])
 }
 
 model Invoice {

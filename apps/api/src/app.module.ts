@@ -9,6 +9,7 @@ import { AppointmentModule } from './appointment/appointment.module';
 import { BillingModule } from './billing/billing.module';
 import { StaffModule } from './staff/staff.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { SettlementModule } from './settlement/settlement.module';
 
 @Module({
   imports: [
@@ -42,6 +43,9 @@ import { NotificationsModule } from './notifications/notifications.module';
 
     // 🔔 Notifications
     NotificationsModule,
+
+    // 🧾 End of Day Settlement
+    SettlementModule,
   ],
   controllers: [],
   providers: [],

@@ -59,6 +59,9 @@ export class AppointmentService {
             queue_number: nextQueueNo,
             estimated_wait_mins: nextQueueNo * 15,
             is_emergency: isEmergency,
+            status_timestamps: {
+                waiting_at: new Date().toISOString(),
+            }
         } as any;
 
         const clinicDoctor = await this.prisma.user.findFirst({
@@ -91,6 +94,27 @@ export class AppointmentService {
         }
 
         return result;
+    }
+
+    async updateStatus(appointmentId: string, status: 'IN_CHAIR' | 'COMPLETED' | 'CANCELLED') {
+        const appointment = await this.prisma.appointment.findUnique({
+            where: { id: appointmentId },
+            select: { status_timestamps: true }
+        });
+
+        const timestamps = (appointment?.status_timestamps as any) || {};
+        const now = new Date().toISOString();
+
+        if (status === 'IN_CHAIR') timestamps.in_chair_at = now;
+        if (status === 'COMPLETED') timestamps.completed_at = now;
+
+        return this.prisma.appointment.update({
+            where: { id: appointmentId },
+            data: {
+                status,
+                status_timestamps: timestamps
+            }
+        });
     }
 
     async getActiveQueue(clinicId: string) {

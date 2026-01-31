@@ -1,9 +1,20 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class BillingService {
     constructor(private prisma: PrismaService) { }
+
+    private async checkLock(clinicId: string, date: Date) {
+        const d = new Date(date);
+        d.setHours(0, 0, 0, 0);
+        const settlement = await (this.prisma as any).daySettlement.findUnique({
+            where: { clinic_id_date: { clinic_id: clinicId, date: d } }
+        });
+        if (settlement && settlement.status === 'CLOSED') {
+            throw new BadRequestException('Security Lockdown: This day is already settled and closed.');
+        }
+    }
 
     async getTariffs(clinicId: string) {
         return this.prisma.tariffMaster.findMany({
@@ -13,7 +24,9 @@ export class BillingService {
     }
 
     async createInvoice(data: any) {
-        const { patientId, clinicId, items, paymentStatus } = data;
+        const { patientId, clinicId, items } = data;
+
+        await this.checkLock(clinicId, new Date());
 
         return this.prisma.$transaction(async (tx) => {
             // 1. Create Invoice

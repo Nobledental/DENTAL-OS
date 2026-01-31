@@ -1,9 +1,23 @@
 import { Controller, Get, Post, Body, Param } from '@nestjs/common';
 import { ClinicalService } from './clinical.service';
+import { AnalyticsService } from './analytics.service';
 
 @Controller('clinical')
 export class ClinicalController {
-  constructor(private readonly clinicalService: ClinicalService) { }
+  constructor(
+    private readonly clinicalService: ClinicalService,
+    private readonly analyticsService: AnalyticsService
+  ) { }
+
+  @Get('analytics/:clinicId')
+  getAnalytics(@Param('clinicId') clinicId: string) {
+    return this.analyticsService.getVelocityMetrics(clinicId);
+  }
+
+  @Get('heatmap/:clinicId')
+  getHeatmap(@Param('clinicId') clinicId: string) {
+    return this.analyticsService.getCongestionHeatmap(clinicId);
+  }
 
   @Post()
   create(@Body() createDto: any) {
