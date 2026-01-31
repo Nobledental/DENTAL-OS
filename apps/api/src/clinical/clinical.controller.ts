@@ -2,13 +2,19 @@ import { Controller, Get, Post, Body, Param, Query } from '@nestjs/common';
 import { ClinicalService } from './clinical.service';
 import { AnalyticsService } from './analytics.service';
 import { ClinicalSpecialistService } from './clinical-specialist.service';
+import { EndodonticService } from './endodontic.service';
+import { OrthodonticService } from './orthodontic.service';
+import { PeriodontalService } from './periodontal.service';
 
 @Controller('clinical')
 export class ClinicalController {
   constructor(
     private readonly clinicalService: ClinicalService,
     private readonly analyticsService: AnalyticsService,
-    private readonly specialistService: ClinicalSpecialistService
+    private readonly specialistService: ClinicalSpecialistService,
+    private readonly endodonticService: EndodonticService,
+    private readonly orthodonticService: OrthodonticService,
+    private readonly periodontalService: PeriodontalService
   ) { }
 
   @Get('analytics/:clinicId')
@@ -55,32 +61,35 @@ export class ClinicalController {
 
   // --- Specialist Module (Phase 11) ---
 
-  @Post('diagnosis/provisional')
-  getProvisionalDiagnosis(@Body() body: { symptoms: string[] }) {
-    return this.specialistService.getProvisionalDiagnosis(body.symptoms);
+  // **Phase 12: RCT Multi-Sitting Endpoint**
+  @Post('rct/save')
+  saveRCTData(@Body() body: { dentalRecordId?: string; patientId: string; metadata: any }) {
+    return this.endodonticService.saveSittingData(body);
   }
 
-  @Post('rct/save')
-  saveRCT(@Body() body: any) {
-    return this.specialistService.saveRCTData(
-      body.dentalRecordId,
-      body.toothNumber,
-      body.data
-    );
+  @Get('rct/history/:dentalRecordId')
+  getRCTHistory(@Param('dentalRecordId') dentalRecordId: string) {
+    return this.endodonticService.getSittingHistory(dentalRecordId);
+  }
+
+  // Existing endpoints
+  @Post('diagnosis/provisional')
+  getProvisionalDiagnosis(@Body() body: { symptoms: string[]; clinicalFindings: string[]; vitalSigns?: string[] }) {
+    return this.specialistService.getProvisionalDiagnosis(body);
   }
 
   @Post('surgery/war-score')
-  calculateWAR(@Body() body: any) {
+  calculateWARScore(@Body() body: { angulation: string; depth: string; relationToRamus: string }) {
     return this.specialistService.calculateWARScore(body);
   }
 
   @Post('ortho/cephalometric')
-  saveCephalometric(@Body() body: any) {
+  saveCephalometricData(@Body() body: { dentalRecordId: string; data: any }) {
     return this.specialistService.saveCephalometricData(body.dentalRecordId, body.data);
   }
 
   @Get('icd/search')
-  searchICD(@Query('q') searchTerm: string) {
+  searchICDCode(@Query('q') searchTerm: string) { // Changed from @Param to @Query to match original
     return this.specialistService.searchICDCode(searchTerm);
   }
 
@@ -90,7 +99,7 @@ export class ClinicalController {
   }
 
   @Get('assets/patient/:patientId')
-  getAssets(@Param('patientId') patientId: string) {
+  getPatientAssets(@Param('patientId') patientId: string) {
     return this.specialistService.getPatientAssets(patientId);
   }
 
@@ -103,4 +112,39 @@ export class ClinicalController {
   getMedicationHistory(@Param('patientId') patientId: string, @Query('days') days?: number) {
     return this.specialistService.getMedicationHistory(patientId, days ? parseInt(days.toString()) : 7);
   }
+
+  // --- Phase 13: Orthodontic Case Study & Cephalometric Engine ---
+
+  @Post('orthodontic/save')
+  saveOrthodonticAnalysis(@Body() body: { patientId: string; metadata: any }) {
+    return this.orthodonticService.saveOrthodonticAnalysis(body);
+  }
+
+  @Get('orthodontic/history/:patientId')
+  getOrthodonticHistory(@Param('patientId') patientId: string) {
+    return this.orthodonticService.getOrthodonticHistory(patientId);
+  }
+
+  @Post('orthodontic/presentation/:clinicalNoteId')
+  generateCasePresentation(@Param('clinicalNoteId') clinicalNoteId: string, @Body() body: { patientId: string }) {
+    return this.orthodonticService.generateCasePresentation(body.patientId, clinicalNoteId);
+  }
+
+  // --- Phase 15: Periodontal Charting & Surgery Suite ---
+
+  @Post('periodontal/save')
+  savePeriodontalChart(@Body() body: { patientId: string; metadata: any }) {
+    return this.periodontalService.savePeriodontalChart(body);
+  }
+
+  @Get('periodontal/history/:patientId')
+  getPeriodontalHistory(@Param('patientId') patientId: string) {
+    return this.periodontalService.getPeriodontalHistory(patientId);
+  }
+
+  @Get('periodontal/suture-reminders/:clinicId')
+  getSutureReminders(@Param('clinicId') clinicId: string) {
+    return this.periodontalService.getSutureReminders(clinicId);
+  }
 }
+

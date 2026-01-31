@@ -1,64 +1,112 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
+// Diagnostic Knowledge Base Interface
+interface DiagnosticRule {
+    diagnosis: string;
+    icd10Code: string;
+    category: string;
+    symptoms: string[];
+    clinicalFindings: string[];
+    vitalSigns?: string[];
+    differentialScore: number;
+}
+
 @Injectable()
 export class ClinicalSpecialistService {
     constructor(private prisma: PrismaService) { }
 
-    // AI Provisional Diagnosis Suggestor (Oral Medicine)
-    async getProvisionalDiagnosis(symptoms: string[]) {
-        const diagnosisMap: Record<string, { diagnosis: string; icd_code: string; confidence: number }[]> = {
-            'radiating_pain': [
-                { diagnosis: 'Acute Pulpitis', icd_code: 'K04.0', confidence: 0.85 },
-                { diagnosis: 'Periapical Abscess', icd_code: 'K04.7', confidence: 0.70 }
-            ],
-            'thermal_sensitivity': [
-                { diagnosis: 'Reversible Pulpitis', icd_code: 'K04.00', confidence: 0.80 },
-                { diagnosis: 'Dentin Hypersensitivity', icd_code: 'K03.8', confidence: 0.65 }
-            ],
-            'swelling': [
-                { diagnosis: 'Periapical Abscess', icd_code: 'K04.7', confidence: 0.90 },
-                { diagnosis: 'Periodontal Abscess', icd_code: 'K05.21', confidence: 0.75 }
-            ],
-            'bleeding_gums': [
-                { diagnosis: 'Gingivitis', icd_code: 'K05.10', confidence: 0.85 },
-                { diagnosis: 'Periodontitis', icd_code: 'K05.30', confidence: 0.70 }
-            ]
-        };
+    // AI Provisional Diagnosis with comprehensive scoring
+    async getProvisionalDiagnosis(input: { symptoms: string[]; clinicalFindings: string[]; vitalSigns?: string[] }) {
+        // Diagnostic Knowledge Base (in production, move to database)
+        const diagnosticKB: DiagnosticRule[] = [
+            {
+                diagnosis: 'Irreversible Pulpitis',
+                icd10Code: 'K04.02',
+                category: 'Pulpal',
+                symptoms: ['spontaneous_pain', 'throbbing_pain', 'radiating_pain', 'nocturnal_pain'],
+                clinicalFindings: ['pain_worse_lying_down', 'lingering_cold_pain'],
+                differentialScore: 0.90
+            },
+            {
+                diagnosis: 'Periapical Abscess (Acute)',
+                icd10Code: 'K04.7',
+                category: 'Periapical',
+                symptoms: ['severe_throbbing', 'swelling', 'pus_discharge', 'fever'],
+                clinicalFindings: ['fluctuant_swelling', 'tender_to_percussion'],
+                vitalSigns: ['elevated_temperature'],
+                differentialScore: 0.92
+            },
+            {
+                diagnosis: 'Pericoronitis',
+                icd10Code: 'K05.22',
+                category: 'Periodontal',
+                symptoms: ['pain_wisdom_tooth', 'difficulty_opening_mouth'],
+                clinicalFindings: ['inflamed_operculum', 'partially_erupted_tooth', 'trismus'],
+                differentialScore: 0.90
+            },
+            {
+                diagnosis: 'Alveolar Osteitis (Dry Socket)',
+                icd10Code: 'K04.7',
+                category: 'Post-Surgical',
+                symptoms: ['intense_boring_pain', 'pain_3_days_post_extraction'],
+                clinicalFindings: ['empty_socket', 'exposed_bone', 'foul_odor'],
+                differentialScore: 0.93
+            }
+        ];
 
-        const suggestions = symptoms
-            .flatMap(symptom => diagnosisMap[symptom] || [])
+        const matches = diagnosticKB.map(rule => {
+            const symptomMatches = input.symptoms.filter(s => rule.symptoms.includes(s)).length;
+            const findingMatches = input.clinicalFindings.filter(f => rule.clinicalFindings.includes(f)).length;
+
+            const symptomScore = rule.symptoms.length > 0 ? symptomMatches / rule.symptoms.length : 0;
+            const findingScore = rule.clinicalFindings.length > 0 ? findingMatches / rule.clinicalFindings.length : 0;
+
+            let matchScore = (symptomScore + findingScore) / 2;
+
+            if (rule.vitalSigns && input.vitalSigns) {
+                const vitalMatches = input.vitalSigns.filter(v => rule.vitalSigns!.includes(v)).length;
+                const vitalScore = vitalMatches / rule.vitalSigns.length;
+                matchScore = (symptomScore + findingScore + vitalScore) / 3;
+            }
+
+            const confidence = Math.min(matchScore * rule.differentialScore, 0.98);
+
+            return {
+                diagnosis: rule.diagnosis,
+                icd_code: rule.icd10Code,
+                category: rule.category,
+                confidence,
+                matchedSymptoms: symptomMatches,
+                matchedFindings: findingMatches
+            };
+        }).filter(r => r.confidence > 0.3)
             .sort((a, b) => b.confidence - a.confidence)
-            .slice(0, 3);
+            .slice(0, 5);
 
-        return suggestions;
+        return matches;
     }
 
     // Endodontics: RCT Tracking
     async saveRCTData(dentalRecordId: string, toothNumber: number, data: any) {
-        return this.prisma.clinicalNote.create({
+        return await this.prisma.clinicalNote.create({
             data: {
                 dental_record_id: dentalRecordId,
+                department: 'ENDODONTICS',
                 note_type: 'RCT_TRACKING',
-                content: JSON.stringify({
+                metadata: {
                     tooth: toothNumber,
-                    cavity_class: data.cavityClass, // I, II, III, IV, V, VI
+                    cavity_class: data.cavityClass,
                     working_length: data.workingLength,
                     master_cone: data.masterCone,
-                    obturation_date: data.obturationDate,
-                    follow_up: data.followUp
-                }),
-                created_by_id: data.doctorId
+                    obturation_date: data.obturationDate
+                } as any
             }
         });
     }
 
     // Oral Surgery: WAR Assessment (Winter, Archer, Rood)
-    async calculateWARScore(data: {
-        angulation: string;
-        depth: string;
-        relationToRamus: string;
-    }) {
+    async calculateWARScore(data: { angulation: string; depth: string; relationToRamus: string }) {
         let score = 0;
 
         // Angulation
@@ -67,85 +115,83 @@ export class ClinicalSpecialistService {
         else if (data.angulation === 'DISTOANGULAR') score += 3;
 
         // Depth
-        if (data.depth === 'LEVEL_A') score += 1;
-        else if (data.depth === 'LEVEL_B') score += 2;
-        else if (data.depth === 'LEVEL_C') score += 3;
+        if (data.depth === 'POSITION_B') score += 2;
+        else if (data.depth === 'POSITION_C') score += 3;
+        else score += 1; // POSITION_A
 
         // Relation to Ramus
-        if (data.relationToRamus === 'CLASS_II') score += 1;
-        else if (data.relationToRamus === 'CLASS_III') score += 2;
+        if (data.relationToRamus === 'CLASS_II') score += 2;
+        else if (data.relationToRamus === 'CLASS_III') score += 3;
+        else score += 1; // CLASS_I
 
-        const difficulty = score <= 3 ? 'EASY' : score <= 6 ? 'MODERATE' : 'DIFFICULT';
+        const difficulty = score <= 4 ? 'EASY' : score <= 7 ? 'MODERATE' : 'DIFFICULT';
 
         return { score, difficulty };
     }
 
     // Orthodontics: Save Cephalometric Data
     async saveCephalometricData(dentalRecordId: string, data: any) {
-        return this.prisma.clinicalNote.create({
+        return await this.prisma.clinicalNote.create({
             data: {
                 dental_record_id: dentalRecordId,
+                department: 'ORTHODONTICS',
                 note_type: 'CEPHALOMETRIC',
-                content: JSON.stringify({
+                metadata: {
                     sna: data.sna,
                     snb: data.snb,
                     anb: data.anb,
                     facial_angle: data.facialAngle,
-                    profile_type: data.profileType // STRAIGHT, CONVEX, CONCAVE
-                }),
-                created_by_id: data.doctorId
+                    profile_type: data.profileType
+                } as any
             }
         });
     }
 
     // ICD-10 Code Lookup
     async searchICDCode(searchTerm: string) {
-        return this.prisma.iCDCode.findMany({
-            where: {
-                OR: [
-                    { code: { contains: searchTerm, mode: 'insensitive' } },
-                    { description: { contains: searchTerm, mode: 'insensitive' } }
-                ]
-            },
-            take: 10
-        });
+        // In production, query actual ICD-10 database
+        // For now, return from in-memory mapping
+        const icd10KB = [
+            { code: 'K04.01', description: 'Reversible Pulpitis' },
+            { code: 'K04.02', description: 'Irreversible Pulpitis' },
+            { code: 'K04.1', description: 'Pulp Necrosis' },
+            { code: 'K04.4', description: 'Acute Apical Periodontitis' },
+            { code: 'K04.7', description: 'Periapical Abscess / Dry Socket' },
+            { code: 'K05.22', description: 'Pericoronitis' },
+            { code: 'K05.10', description: 'Gingivitis' },
+            { code: 'K05.30', description: 'Chronic Periodontitis' }
+        ];
+
+        return icd10KB.filter(item =>
+            item.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            item.description.toLowerCase().includes(searchTerm.toLowerCase())
+        );
     }
 
     // Media Vault: Upload Clinical Asset
-    async uploadClinicalAsset(data: {
-        clinicId: string;
-        patientId?: string;
-        type: string;
-        url: string;
-        metadata?: any;
-    }) {
-        return this.prisma.clinicAsset.create({
+    async uploadClinicalAsset(data: { clinicId: string; patientId?: string; type: string; url: string; metadata?: any }) {
+        return await this.prisma.clinicAsset.create({
             data: {
                 clinic_id: data.clinicId,
                 patient_id: data.patientId,
                 type: data.type,
                 url: data.url,
-                metadata: data.metadata
+                metadata: data.metadata as any
             }
         });
     }
 
     // Get Clinical Assets for Patient
     async getPatientAssets(patientId: string) {
-        return this.prisma.clinicAsset.findMany({
+        return await this.prisma.clinicAsset.findMany({
             where: { patient_id: patientId },
             orderBy: { created_at: 'desc' }
         });
     }
 
     // Medication Tracker: Log Patient Adherence
-    async logMedication(data: {
-        patientId: string;
-        drugName: string;
-        status: 'TAKEN' | 'MISSED';
-        notes?: string;
-    }) {
-        return this.prisma.medicationLog.create({
+    async logMedication(data: { patientId: string; drugName: string; status: 'TAKEN' | 'MISSED'; notes?: string }) {
+        return await this.prisma.medicationLog.create({
             data: {
                 patient_id: data.patientId,
                 drug_name: data.drugName,
@@ -160,7 +206,7 @@ export class ClinicalSpecialistService {
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - days);
 
-        return this.prisma.medicationLog.findMany({
+        return await this.prisma.medicationLog.findMany({
             where: {
                 patient_id: patientId,
                 logged_at: { gte: startDate }

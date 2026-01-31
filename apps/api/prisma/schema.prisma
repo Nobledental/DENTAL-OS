@@ -239,6 +239,11 @@ model ClinicalNote {
 
   treatment_plan String?
 
+  // Departmental Intelligence (Phase 11)
+  department String? // ORAL_MEDICINE, ORAL_SURGERY, ENDODONTICS, ORTHODONTICS
+  note_type  String? // RCT_TRACKING, CEPHALOMETRIC, WAR_ASSESSMENT, PROVISIONAL_DIAGNOSIS
+  metadata   Json?   // Department-specific data: { war_score: 7, difficulty: "MODERATE", working_length: 22.5 }
+
   // Files
   xray_urls     String[] // Encrypted URLs (DICOM/JPG)
   consent_forms String[] // Signed PDF URLs
