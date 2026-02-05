@@ -53,11 +53,15 @@ export class EndodonticService {
     }
 
     async completeObturation(clinicalNoteId: string, obturationDate: string) {
+        const existingNote = await this.prisma.clinicalNote.findUniqueOrThrow({
+            where: { id: clinicalNoteId }
+        });
+
         const note = await this.prisma.clinicalNote.update({
             where: { id: clinicalNoteId },
             data: {
                 metadata: {
-                    ...(note.metadata as any),
+                    ...(existingNote.metadata as any),
                     obturated: true,
                     obturationDate
                 } as any

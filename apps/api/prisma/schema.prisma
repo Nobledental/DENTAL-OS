@@ -220,6 +220,7 @@ model DentalRecord {
   charting_data Json // Universal Numbering System
 
   treatment_plans TreatmentPlan[]
+  clinical_notes  ClinicalNote[]
 
   updated_at DateTime @updatedAt
 }
@@ -228,6 +229,10 @@ model ClinicalNote {
   id         String  @id @default(uuid())
   patient_id String
   patient    Patient @relation(fields: [patient_id], references: [id])
+
+  // Link to Specific Dental Charting
+  dental_record_id String?
+  dental_record    DentalRecord? @relation(fields: [dental_record_id], references: [id])
 
   // Vitals at time of visit
   visit_vitals Json? // { bp, hr, spo2, temp, rr }
@@ -238,9 +243,10 @@ model ClinicalNote {
   clinical_findings String?
   diagnosis         String? // Linked to ICD-11
 
-  // Lab Tracking
-  lab_orders  Json? // [ "HbA1c", "Vitamin D" ]
-  lab_results Json? // { "HbA1c": 6.5, "date": "..." } -> Powers Dashboard
+  // Lab & Scripts
+  lab_orders    Json? // [ "HbA1c", "Vitamin D" ]
+  lab_results   Json? // { "HbA1c": 6.5, "date": "..." } -> Powers Dashboard
+  prescriptions Json? // [ { "drug": "Amoxy", "dosage": "500mg" } ]
 
   treatment_plan String?
 
