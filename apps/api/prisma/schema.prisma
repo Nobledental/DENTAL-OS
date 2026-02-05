@@ -22,7 +22,12 @@ model Clinic {
   branding_config       Json? // Branding: { "logo": "url", "colors": { "primary": "#hex" } }
   is_marketplace_active Boolean  @default(false)
   discovery_enabled     Boolean  @default(false)
+  discovery_enabled     Boolean  @default(false)
   is_verified           Boolean  @default(false)
+
+  // Location (HealthFlo Pivot)
+  latitude              Float?
+  longitude             Float?
 
   // Public Profile (Zomato-style)
   services         Json? // ["Root Canal", "Implants"]

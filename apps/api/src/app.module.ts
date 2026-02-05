@@ -10,6 +10,7 @@ import { BillingModule } from './billing/billing.module';
 import { StaffModule } from './staff/staff.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { SettlementModule } from './settlement/settlement.module';
+import { MarketplaceModule } from './marketplace/marketplace.module';
 
 @Module({
   imports: [
@@ -45,7 +46,11 @@ import { SettlementModule } from './settlement/settlement.module';
     NotificationsModule,
 
     // 🧾 End of Day Settlement
+    // 🧾 End of Day Settlement
     SettlementModule,
+
+    // 🌍 HealthFlo Marketplace
+    MarketplaceModule,
   ],
   controllers: [],
   providers: [],
