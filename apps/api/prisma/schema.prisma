@@ -57,6 +57,12 @@ enum Role {
   DOCTOR
   RECEPTIONIST
   PATIENT
+  STUDENT
+}
+
+enum RegistrationStatus {
+  TEMPORARY
+  PERMANENT
 }
 
 model User {
@@ -65,6 +71,11 @@ model User {
   phone         String  @unique
   password_hash String
   role          Role    @default(PATIENT)
+
+  // Professional Evolution
+  registration_status RegistrationStatus @default(TEMPORARY)
+  registration_number String?
+  current_year        Int?               // 1-4 for students
 
   // Encrypted Fields (handled by middleware)
   full_name String
@@ -77,10 +88,24 @@ model User {
 
   // Relations
   patient_profile     Patient? // If role is PATIENT
+  staff_profile       StaffData?
   doctor_appointments Appointment[] @relation("DoctorAppointments")
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
+}
+
+model StaffData {
+  id      String @id @default(uuid())
+  user_id String @unique
+  user    User   @relation(fields: [user_id], references: [id])
+
+  registration_status RegistrationStatus @default(TEMPORARY)
+  registration_number String?
+  
+  qualification String?
+  experience    Int?
+  documents     Json? // Aadhaar, PAN, Degree URLs
 }
 
 // --------------------------------------------------------
@@ -602,4 +627,28 @@ model ConsultantInvitation {
   
   expires_at DateTime
   created_at DateTime @default(now())
+}
+
+// --------------------------------------------------------
+// ACADEMIC & NEET-MDS ENGINE
+// --------------------------------------------------------
+
+model AcademicNode {
+  id        String   @id @default(uuid())
+  title     String
+  content   String
+  yearLevel Int      // 1-4
+  tags      String[]
+  created_at DateTime @default(now())
+}
+
+model MCQ {
+  id          String   @id @default(uuid())
+  question    String
+  options     Json     // ["A", "B", "C", "D"]
+  answer      String
+  subjectYear Int      // 1-4
+  difficulty  String   @default("MEDIUM")
+  category    String?  // Anatomy, Pharma, etc.
+  created_at  DateTime @default(now())
 }

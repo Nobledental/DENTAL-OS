@@ -11,6 +11,8 @@ import { StaffModule } from './staff/staff.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { SettlementModule } from './settlement/settlement.module';
 import { MarketplaceModule } from './marketplace/marketplace.module';
+import { ProfessionalModule } from './professional/professional.module';
+import { AcademicModule } from './academic/academic.module';
 
 @Module({
   imports: [
@@ -51,6 +53,10 @@ import { MarketplaceModule } from './marketplace/marketplace.module';
 
     // 🌍 HealthFlo Marketplace
     MarketplaceModule,
+
+    // 🎓 Professional & Academic
+    ProfessionalModule,
+    AcademicModule,
   ],
   controllers: [],
   providers: [],
